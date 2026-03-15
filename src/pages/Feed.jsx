@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getAvatarUrl } from '../lib/classes'
@@ -32,7 +32,7 @@ function timeAgo(date) {
   return `${Math.floor(diff/86400)}d`
 }
 
-function PostCard({ post, currentUser, onUpdate }) {
+function PostCard({ post, currentUser }) {
   const [curtido, setCurtido] = useState(false)
   const [nCurtidas, setNCurtidas] = useState(0)
   const [nComents, setNComents] = useState(0)
@@ -42,30 +42,37 @@ function PostCard({ post, currentUser, onUpdate }) {
   const [enviando, setEnviando] = useState(false)
 
   useEffect(() => {
-    supabase.from('curtidas').select('id', { count: 'exact' }).eq('post_id', post.id)
-      .then(({ count }) => setNCurtidas(count || 0))
-    supabase.from('curtidas').select('id').eq('post_id', post.id).eq('perfil_id', currentUser.id).limit(1)
-      .then(({ data }) => setCurtido(data?.length > 0))
-    supabase.from('comentarios').select('id', { count: 'exact' }).eq('post_id', post.id)
-      .then(({ count }) => setNComents(count || 0))
+    const load = async () => {
+      const [{ count: nc }, { count: nco }, { data: myCurtida }] = await Promise.all([
+        supabase.from('curtidas').select('id', { count: 'exact', head: true }).eq('post_id', post.id),
+        supabase.from('comentarios').select('id', { count: 'exact', head: true }).eq('post_id', post.id),
+        supabase.from('curtidas').select('id').eq('post_id', post.id).eq('perfil_id', currentUser.id),
+      ])
+      setNCurtidas(nc || 0)
+      setNComents(nco || 0)
+      setCurtido(myCurtida?.length > 0)
+    }
+    load()
   }, [post.id, currentUser.id])
 
   const toggleCurtir = async () => {
     if (curtido) {
       await supabase.from('curtidas').delete().eq('post_id', post.id).eq('perfil_id', currentUser.id)
-      setCurtido(false); setNCurtidas(n => n - 1)
+      setCurtido(false); setNCurtidas(n => Math.max(0, n-1))
     } else {
       await supabase.from('curtidas').insert({ post_id: post.id, perfil_id: currentUser.id })
-      setCurtido(true); setNCurtidas(n => n + 1)
+      setCurtido(true); setNCurtidas(n => n+1)
     }
   }
 
   const abrirComentarios = async () => {
-    setShowComents(true)
-    const { data } = await supabase.from('comentarios')
-      .select('*, autor:autor_id(id,nome,foto_url)')
-      .eq('post_id', post.id).order('criado_em')
-    setComentarios(data || [])
+    setShowComents(v => !v)
+    if (!showComents) {
+      const { data } = await supabase.from('comentarios')
+        .select('*, autor:autor_id(id,nome,foto_url)')
+        .eq('post_id', post.id).order('criado_em')
+      setComentarios(data || [])
+    }
   }
 
   const enviarComentario = async () => {
@@ -73,51 +80,51 @@ function PostCard({ post, currentUser, onUpdate }) {
     setEnviando(true)
     await supabase.from('comentarios').insert({ post_id: post.id, autor_id: currentUser.id, texto: novoComent.trim() })
     setNovoComent('')
-    setNComents(n => n + 1)
-    await abrirComentarios()
+    setNComents(n => n+1)
+    const { data } = await supabase.from('comentarios')
+      .select('*, autor:autor_id(id,nome,foto_url)')
+      .eq('post_id', post.id).order('criado_em')
+    setComentarios(data || [])
     setEnviando(false)
   }
 
   const autor = post.autor || {}
-  const avatar = getAvatarUrl(autor.nome, autor.avatar_seed)
+  const avatar = getAvatarUrl(autor.nome)
 
   return (
     <div className="post-card fade-in">
-      {/* Header do post */}
       <div className="post-header">
-        <div className="avatar-init" style={{ width: 38, height: 38, background: '#eef2ff', color: 'var(--azul)', fontSize: 13, flexShrink: 0 }}>
-          <img src={autor.foto_url || avatar} alt={autor.nome} onError={e => e.target.style.display='none'} />
+        <div className="avatar-init" style={{ width:38, height:38, background:'#eef2ff', color:'var(--azul)', fontSize:13, flexShrink:0 }}>
+          <img src={autor.foto_url || avatar} alt={autor.nome} onError={e => { e.target.style.display='none' }} />
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--texto)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{autor.nome}</p>
-          <p style={{ fontSize: 11, color: 'var(--texto-suave)' }}>{autor.classe || autor.tipo} · {timeAgo(post.criado_em)}</p>
+        <div style={{ flex:1, minWidth:0 }}>
+          <p style={{ fontSize:13, fontWeight:700, color:'var(--texto)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{autor.nome || 'Membro'}</p>
+          <p style={{ fontSize:11, color:'var(--texto-suave)' }}>{autor.classe || autor.tipo || ''}{autor.classe ? '' : ''} · {timeAgo(post.criado_em)}</p>
         </div>
-        {post.tipo === 'checkin' && (
-          <span className="badge badge-ok">+20 pts</span>
-        )}
+        {post.tipo === 'checkin' && <span className="badge badge-ok">+20 pts</span>}
       </div>
 
-      {/* Card de check-in automático */}
+      {/* Check-in card */}
       {post.tipo === 'checkin' && (
         <div className="checkin-card">
           <div className="checkin-icon">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           </div>
           <div>
-            <p style={{ fontSize: 11, fontWeight: 800, color: '#15803d' }}>Check-in confirmado!</p>
-            <p style={{ fontSize: 10, color: '#86efac' }}>{post.conteudo}</p>
+            <p style={{ fontSize:11, fontWeight:800, color:'#15803d' }}>Check-in confirmado!</p>
+            <p style={{ fontSize:10, color:'#4ade80' }}>{post.conteudo}</p>
           </div>
         </div>
       )}
 
-      {/* Card de conquista */}
+      {/* Conquista */}
       {post.tipo === 'conquista' && post.requisito_info && (
         <div className="conquista-card">
-          <p style={{ fontSize: 9, fontWeight: 700, color: 'var(--azul)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 }}>Requisito concluído</p>
-          <p style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>{post.requisito_info.requisito}</p>
-          <p style={{ fontSize: 10, color: 'var(--texto-suave)', marginTop: 2 }}>{post.requisito_info.classe} · {post.requisito_info.secao}</p>
-          <div className="prog-bg" style={{ marginTop: 8 }}>
-            <div className="prog-fill" style={{ width: `${post.requisito_info.pct || 0}%` }} />
+          <p style={{ fontSize:9, fontWeight:700, color:'var(--azul)', textTransform:'uppercase', letterSpacing:1, marginBottom:3 }}>Requisito concluído</p>
+          <p style={{ fontSize:12, fontWeight:700, color:'#374151' }}>{post.requisito_info.requisito}</p>
+          <p style={{ fontSize:10, color:'var(--texto-suave)', marginTop:2 }}>{post.requisito_info.classe} · {post.requisito_info.secao}</p>
+          <div className="prog-bg" style={{ marginTop:8 }}>
+            <div className="prog-fill" style={{ width:`${post.requisito_info.pct||0}%` }} />
           </div>
         </div>
       )}
@@ -132,22 +139,22 @@ function PostCard({ post, currentUser, onUpdate }) {
         <img src={post.midia_url} alt="Post" className="post-media" />
       )}
       {post.midia_url && post.midia_tipo === 'video' && (
-        <video src={post.midia_url} controls className="post-media" style={{ maxHeight: 280 }} />
+        <video src={post.midia_url} controls className="post-media" style={{ maxHeight:280 }} playsInline />
       )}
 
       {/* Versículo */}
-      {post.tipo === 'versiculo' && post.versiculo_ref && (
-        <div style={{ margin: '8px 14px 0', background: '#fffbeb', borderLeft: '3px solid var(--dourado)', borderRadius: '0 8px 8px 0', padding: '8px 12px' }}>
-          <p style={{ fontSize: 12, color: '#78350f', fontStyle: 'italic', lineHeight: 1.6 }}>"{post.conteudo}"</p>
-          <p style={{ fontSize: 10, color: 'var(--dourado)', fontWeight: 700, marginTop: 4 }}>{post.versiculo_ref}</p>
+      {post.tipo === 'versiculo' && (
+        <div style={{ margin:'8px 14px 0', background:'#fffbeb', borderLeft:'3px solid var(--dourado)', borderRadius:'0 8px 8px 0', padding:'8px 12px' }}>
+          {post.conteudo && <p style={{ fontSize:12, color:'#78350f', fontStyle:'italic', lineHeight:1.6 }}>"{post.conteudo}"</p>}
+          {post.versiculo_ref && <p style={{ fontSize:10, color:'var(--dourado)', fontWeight:700, marginTop:4 }}>{post.versiculo_ref}</p>}
         </div>
       )}
 
       {/* Ações */}
       <div className="post-actions">
-        <button className={`post-action-btn ${curtido ? 'liked' : ''}`} onClick={toggleCurtir}>
+        <button className={`post-action-btn ${curtido?'liked':''}`} onClick={toggleCurtir}>
           {IC_HEART(curtido)}
-          <span style={{ color: curtido ? '#ef4444' : '#9ca3af' }}>{nCurtidas}</span>
+          <span style={{ color: curtido?'#ef4444':'#9ca3af' }}>{nCurtidas}</span>
         </button>
         <button className="post-action-btn" onClick={abrirComentarios}>
           {IC_COMMENT}
@@ -157,27 +164,25 @@ function PostCard({ post, currentUser, onUpdate }) {
 
       {/* Comentários */}
       {showComents && (
-        <div style={{ borderTop: '1px solid #f3f4f6', padding: '10px 14px' }}>
+        <div style={{ borderTop:'1px solid #f3f4f6', padding:'10px 14px' }}>
           {comentarios.map(c => (
-            <div key={c.id} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'flex-start' }}>
-              <div className="avatar-init" style={{ width: 26, height: 26, background: '#eef2ff', color: 'var(--azul)', fontSize: 10, flexShrink: 0 }}>
-                <img src={c.autor?.foto_url || getAvatarUrl(c.autor?.nome)} alt="" onError={e => e.target.style.display='none'} />
+            <div key={c.id} style={{ display:'flex', gap:8, marginBottom:8, alignItems:'flex-start' }}>
+              <div className="avatar-init" style={{ width:26, height:26, background:'#eef2ff', color:'var(--azul)', fontSize:10, flexShrink:0 }}>
+                <img src={c.autor?.foto_url || getAvatarUrl(c.autor?.nome)} alt="" onError={e => { e.target.style.display='none' }} />
               </div>
-              <div style={{ background: '#f5f5f5', borderRadius: '0 10px 10px 10px', padding: '7px 10px', flex: 1 }}>
-                <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--texto)', marginBottom: 2 }}>{c.autor?.nome}</p>
-                <p style={{ fontSize: 12, color: '#444', lineHeight: 1.5 }}>{c.texto}</p>
+              <div style={{ background:'#f5f5f5', borderRadius:'0 10px 10px 10px', padding:'7px 10px', flex:1 }}>
+                <p style={{ fontSize:10, fontWeight:700, color:'var(--texto)', marginBottom:2 }}>{c.autor?.nome}</p>
+                <p style={{ fontSize:12, color:'#444', lineHeight:1.5 }}>{c.texto}</p>
               </div>
             </div>
           ))}
-          {/* Input comentário */}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', background: '#f5f5f5', borderRadius: 99, padding: '5px 5px 5px 12px', marginTop: 4 }}>
-            <input
-              value={novoComent} onChange={e => setNovoComent(e.target.value)}
-              placeholder="Comentar..." style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontFamily: 'Plus Jakarta Sans', fontSize: 13, color: 'var(--texto)', minWidth: 0 }}
-              onKeyDown={e => e.key === 'Enter' && enviarComentario()}
-            />
-            <button onClick={enviarComentario} disabled={enviando || !novoComent.trim()}
-              style={{ width: 30, height: 30, background: 'var(--azul)', borderRadius: '50%', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+          <div style={{ display:'flex', gap:8, alignItems:'center', background:'#f5f5f5', borderRadius:99, padding:'5px 5px 5px 12px', marginTop:4 }}>
+            <input value={novoComent} onChange={e => setNovoComent(e.target.value)}
+              placeholder="Comentar..."
+              style={{ flex:1, border:'none', outline:'none', background:'transparent', fontFamily:'Plus Jakarta Sans', fontSize:14, color:'var(--texto)', minWidth:0 }}
+              onKeyDown={e => e.key==='Enter' && enviarComentario()} />
+            <button onClick={enviarComentario} disabled={enviando||!novoComent.trim()}
+              style={{ width:30, height:30, background:'var(--azul)', borderRadius:'50%', border:'none', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', flexShrink:0, opacity: novoComent.trim()?1:0.4 }}>
               {IC_SEND}
             </button>
           </div>
@@ -194,7 +199,9 @@ function ModalNovaPublicacao({ onClose, onPost, currentUser }) {
   const [midia, setMidia] = useState(null)
   const [midiaPreview, setMidiaPreview] = useState(null)
   const [loading, setLoading] = useState(false)
-  const fileRef = useRef()
+  const [erro, setErro] = useState('')
+  const fileRefCamera = useRef()
+  const fileRefGaleria = useRef()
 
   const selecionarMidia = (e) => {
     const file = e.target.files[0]
@@ -205,75 +212,91 @@ function ModalNovaPublicacao({ onClose, onPost, currentUser }) {
   }
 
   const publicar = async () => {
-    if (!texto.trim() && !midia) return
-    setLoading(true)
-    let midia_url = null
-    let midia_tipo = null
+    if (!texto.trim() && !midia && tipo !== 'versiculo') { setErro('Escreva algo para publicar.'); return }
+    if (tipo === 'versiculo' && !texto.trim()) { setErro('Escreva o texto do versículo.'); return }
+    setLoading(true); setErro('')
 
+    let midia_url = null, midia_tipo = null
     if (midia) {
       const ext = midia.name.split('.').pop()
       const path = `${currentUser.id}/${Date.now()}.${ext}`
-      const { data: upData } = await supabase.storage.from('posts-midia').upload(path, midia, { upsert: true })
-      if (upData) {
+      const { data: upData, error: upErr } = await supabase.storage
+        .from('posts-midia').upload(path, midia, { upsert: true })
+      if (!upErr && upData) {
         const { data: urlData } = supabase.storage.from('posts-midia').getPublicUrl(path)
         midia_url = urlData.publicUrl
         midia_tipo = midia.type.startsWith('video') ? 'video' : 'imagem'
       }
     }
 
-    await supabase.from('posts').insert({
+    const { error } = await supabase.from('posts').insert({
       autor_id: currentUser.id,
-      tipo: tipo === 'texto' || tipo === 'foto' || tipo === 'video' ? tipo : 'texto',
+      tipo,
       conteudo: texto.trim() || null,
       midia_url, midia_tipo,
-      versiculo_ref: tipo === 'versiculo' ? versiculo : null,
+      versiculo_ref: tipo === 'versiculo' ? versiculo.trim() || null : null,
     })
 
     setLoading(false)
+    if (error) { setErro('Erro ao publicar. Tente novamente.'); return }
     onPost()
     onClose()
   }
 
   const tipos = [
-    { id: 'texto',    label: '✍️ Texto',    cor: '#eef2ff', corT: 'var(--azul)' },
-    { id: 'foto',     label: '📷 Foto',     cor: '#eef2ff', corT: 'var(--azul)' },
-    { id: 'video',    label: '🎥 Vídeo',    cor: '#eef2ff', corT: 'var(--azul)' },
-    { id: 'versiculo',label: '📖 Versículo',cor: '#fffbeb', corT: '#b45309' },
+    { id:'texto',     label:'✍️ Texto' },
+    { id:'versiculo', label:'📖 Versículo' },
   ]
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-sheet" onClick={e => e.stopPropagation()}>
         <div className="modal-handle-bar" />
-        <div className="modal-header">
-          <p className="modal-title">Nova publicação</p>
-        </div>
+        <div className="modal-header"><p className="modal-title">Nova publicação</p></div>
         <div className="modal-body">
-          {/* Tipos */}
-          <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+
+          {/* Tipo de post */}
+          <div style={{ display:'flex', gap:6, marginBottom:14, flexWrap:'wrap' }}>
             {tipos.map(t => (
-              <button key={t.id} onClick={() => { setTipo(t.id); if (t.id==='foto'||t.id==='video') fileRef.current?.click() }}
-                style={{ background: tipo===t.id ? 'var(--azul)' : t.cor, color: tipo===t.id ? '#fff' : t.corT, border: 'none', borderRadius: 99, padding: '6px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'Plus Jakarta Sans' }}>
+              <button key={t.id} onClick={() => setTipo(t.id)}
+                style={{ background: tipo===t.id?'var(--azul)':'#f3f4f6', color: tipo===t.id?'#fff':'var(--texto)', border:'none', borderRadius:99, padding:'6px 14px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'Plus Jakarta Sans' }}>
                 {t.label}
               </button>
             ))}
           </div>
 
-          <input ref={fileRef} type="file" accept="image/*,video/*" style={{ display: 'none' }} onChange={selecionarMidia} />
+          {/* Mídia — câmera e galeria separados */}
+          <div style={{ display:'flex', gap:8, marginBottom:14 }}>
+            <button onClick={() => fileRefCamera.current?.click()}
+              style={{ flex:1, background:'#eef2ff', border:'1px solid #c7d2fe', borderRadius:'var(--radius-sm)', padding:'10px', display:'flex', alignItems:'center', justifyContent:'center', gap:6, cursor:'pointer', fontSize:12, fontWeight:700, color:'var(--azul)', fontFamily:'Plus Jakarta Sans' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              Câmera
+            </button>
+            <button onClick={() => fileRefGaleria.current?.click()}
+              style={{ flex:1, background:'#eef2ff', border:'1px solid #c7d2fe', borderRadius:'var(--radius-sm)', padding:'10px', display:'flex', alignItems:'center', justifyContent:'center', gap:6, cursor:'pointer', fontSize:12, fontWeight:700, color:'var(--azul)', fontFamily:'Plus Jakarta Sans' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              Galeria
+            </button>
+          </div>
+
+          {/* Input câmera — captura direto */}
+          <input ref={fileRefCamera} type="file" accept="image/*,video/*" capture="environment" style={{ display:'none' }} onChange={selecionarMidia} />
+          {/* Input galeria — sem capture */}
+          <input ref={fileRefGaleria} type="file" accept="image/*,video/*" style={{ display:'none' }} onChange={selecionarMidia} />
 
           {/* Preview mídia */}
           {midiaPreview && (
-            <div style={{ marginBottom: 12, position: 'relative' }}>
+            <div style={{ marginBottom:12, position:'relative' }}>
               {midia?.type.startsWith('video')
-                ? <video src={midiaPreview} controls style={{ width: '100%', borderRadius: 12, maxHeight: 200 }} />
-                : <img src={midiaPreview} alt="" style={{ width: '100%', borderRadius: 12, maxHeight: 200, objectFit: 'cover' }} />
+                ? <video src={midiaPreview} controls style={{ width:'100%', borderRadius:12, maxHeight:200 }} />
+                : <img src={midiaPreview} alt="" style={{ width:'100%', borderRadius:12, maxHeight:200, objectFit:'cover' }} />
               }
-              <button onClick={() => { setMidia(null); setMidiaPreview(null) }}
-                style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: '50%', width: 26, height: 26, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>✕</button>
+              <button onClick={() => { setMidia(null); setMidiaPreview(null); setTipo('texto') }}
+                style={{ position:'absolute', top:8, right:8, background:'rgba(0,0,0,0.6)', border:'none', borderRadius:'50%', width:26, height:26, color:'#fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14 }}>✕</button>
             </div>
           )}
 
-          {/* Versículo ref */}
+          {/* Referência versículo */}
           {tipo === 'versiculo' && (
             <div className="field-wrap-light">
               <label className="field-label">Referência (ex: João 3:16)</label>
@@ -283,12 +306,16 @@ function ModalNovaPublicacao({ onClose, onPost, currentUser }) {
 
           {/* Texto */}
           <div className="field-wrap-light">
-            <label className="field-label">{tipo === 'versiculo' ? 'Texto do versículo' : 'O que quer compartilhar?'}</label>
-            <textarea className="input-light" rows={3} placeholder="Escreva aqui..." value={texto} onChange={e => setTexto(e.target.value)}
-              style={{ resize: 'none', height: 'auto', minHeight: 80 }} />
+            <label className="field-label">{tipo==='versiculo' ? 'Texto do versículo' : 'O que quer compartilhar?'}</label>
+            <textarea className="input-light" rows={3}
+              placeholder={tipo==='versiculo' ? 'Cole o versículo aqui...' : 'Escreva algo...'}
+              value={texto} onChange={e => setTexto(e.target.value)}
+              style={{ resize:'none', minHeight:80 }} />
           </div>
 
-          <button className="btn btn-blue" onClick={publicar} disabled={loading || (!texto.trim() && !midia)}>
+          {erro && <div className="error-msg" style={{ marginBottom:12 }}>{erro}</div>}
+
+          <button className="btn btn-blue" onClick={publicar} disabled={loading}>
             {loading ? 'Publicando...' : 'Publicar'}
           </button>
         </div>
@@ -304,19 +331,27 @@ export default function Feed() {
   const [showModal, setShowModal] = useState(false)
   const [totalMembros, setTotalMembros] = useState(0)
 
-  const carregar = async () => {
+  const carregar = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.from('posts')
-      .select('*, autor:autor_id(id,nome,foto_url,classe,tipo,avatar_seed)')
+    // Query com join explícito para buscar autor
+    const { data, error } = await supabase
+      .from('posts')
+      .select(`
+        id, tipo, conteudo, midia_url, midia_tipo, versiculo_ref, requisito_info, criado_em,
+        autor:autor_id (id, nome, foto_url, classe, tipo, avatar_seed)
+      `)
       .order('criado_em', { ascending: false })
-      .limit(30)
+      .limit(50)
+
+    if (error) console.error('Feed error:', error)
     setPosts(data || [])
-    const { count } = await supabase.from('perfis').select('id', { count: 'exact' })
+
+    const { count } = await supabase.from('perfis').select('id', { count: 'exact', head: true })
     setTotalMembros(count || 0)
     setLoading(false)
-  }
+  }, [])
 
-  useEffect(() => { carregar() }, [])
+  useEffect(() => { carregar() }, [carregar])
 
   const avatar = getAvatarUrl(user?.nome, user?.avatar_seed)
 
@@ -324,42 +359,42 @@ export default function Feed() {
     <div className="app-shell">
       <div className="scroll-area fade-in">
         {/* Header */}
-        <div className="profile-header" style={{ paddingBottom: 20 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="profile-header" style={{ paddingBottom:20 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             <div>
-              <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 2 }}>Bem-vindo!</p>
+              <p style={{ fontSize:11, color:'rgba(255,255,255,0.45)', marginBottom:2 }}>Bem-vindo!</p>
               <p className="profile-nome">{user?.nome?.split(' ')[0]}</p>
             </div>
-            <div style={{ position: 'relative', cursor: 'pointer' }}>
-              <div className="profile-avatar" style={{ width: 44, height: 44 }}>
-                <img src={user?.foto_url || avatar} alt={user?.nome} onError={e => e.target.style.display='none'} />
+            <div style={{ position:'relative' }}>
+              <div className="profile-avatar" style={{ width:44, height:44 }}>
+                <img src={user?.foto_url || avatar} alt={user?.nome} onError={e => { e.target.style.display='none' }} />
               </div>
-              <div style={{ position: 'absolute', bottom: -2, right: -2, width: 18, height: 18, background: '#fff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid #eee' }}>
+              <div style={{ position:'absolute', bottom:-2, right:-2, width:18, height:18, background:'#fff', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', border:'1.5px solid #eee' }}>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="var(--azul)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
               </div>
             </div>
           </div>
-          {/* Stats */}
           <div className="header-stats">
             <div className="header-stat"><div className="header-stat-value">{totalMembros}</div><div className="header-stat-label">Membros</div></div>
-            <div className="header-stat"><div className="header-stat-value">{user?.pontos ?? 0}</div><div className="header-stat-label">Seus pts</div></div>
+            <div className="header-stat"><div className="header-stat-value">{user?.pontos??0}</div><div className="header-stat-label">Seus pts</div></div>
             <div className="header-stat"><div className="header-stat-value">{posts.length}</div><div className="header-stat-label">Posts</div></div>
           </div>
         </div>
 
-        <div style={{ padding: '14px 16px' }}>
+        <div style={{ padding:'14px 16px' }}>
           {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <div className="spinner" style={{ margin: '0 auto', borderTopColor: 'var(--azul)' }} />
+            <div style={{ textAlign:'center', padding:'40px 0' }}>
+              <div className="spinner" style={{ margin:'0 auto', borderTopColor:'var(--azul)' }} />
+              <p style={{ fontSize:12, color:'var(--texto-suave)', marginTop:12 }}>Carregando feed...</p>
             </div>
           ) : posts.length === 0 ? (
             <div className="empty-state">
-              <div style={{ fontSize: 40, marginBottom: 8 }}>✨</div>
-              <p>Nenhuma publicação ainda.</p>
-              <p style={{ fontSize: 12, marginTop: 4 }}>Seja o primeiro a compartilhar!</p>
+              <div style={{ fontSize:40, marginBottom:8 }}>✨</div>
+              <p style={{ fontWeight:600 }}>Nenhuma publicação ainda.</p>
+              <p style={{ fontSize:12, marginTop:4, color:'var(--texto-suave)' }}>Seja o primeiro a compartilhar!</p>
             </div>
           ) : (
-            posts.map(p => <PostCard key={p.id} post={p} currentUser={user} onUpdate={carregar} />)
+            posts.map(p => <PostCard key={p.id} post={p} currentUser={user} />)
           )}
         </div>
       </div>
