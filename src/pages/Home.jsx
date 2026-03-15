@@ -1,136 +1,154 @@
-import { useAuth } from '../lib/AuthContext'
-import { getAvatarUrl, calcularPct, CLASSES } from '../lib/classes'
-import { supabase } from '../lib/supabase'
 import { useState, useEffect } from 'react'
+import { useAuth } from '../lib/AuthContext'
+import { supabase } from '../lib/supabase'
+import { calcularPct, CLASSES, getAvatarUrl } from '../lib/classes'
 
-function calcularIdade(dataNasc) {
-  if (!dataNasc) return '—'
-  const hoje = new Date()
-  const nasc = new Date(dataNasc)
-  let idade = hoje.getFullYear() - nasc.getFullYear()
-  const m = hoje.getMonth() - nasc.getMonth()
-  if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--
-  return idade
+function calcIdade(d) {
+  if (!d) return '—'
+  const hoje = new Date(), nasc = new Date(d)
+  let i = hoje.getFullYear() - nasc.getFullYear()
+  if (hoje.getMonth() - nasc.getMonth() < 0 || (hoje.getMonth() === nasc.getMonth() && hoje.getDate() < nasc.getDate())) i--
+  return i
 }
 
-function tipoBadge(tipo) {
-  const map = {
-    desbravador: { label: 'Desbravador', color: '#22c55e' },
-    instrutor:   { label: 'Instrutor',   color: '#3b82f6' },
-    conselheiro: { label: 'Conselheiro', color: '#8b5cf6' },
-    diretoria:   { label: 'Diretoria',   color: '#f5c000' },
-  }
-  return map[tipo] || { label: tipo, color: '#6b7280' }
-}
+const TIPO_LABEL = { desbravador:'Desbravador', instrutor:'Instrutor', conselheiro:'Conselheiro', diretoria:'Diretoria' }
 
 export default function Home() {
   const { user, logout } = useAuth()
   const [progresso, setProgresso] = useState({})
   const [ultimoCheckin, setUltimoCheckin] = useState(null)
+  const [evento, setEvento] = useState(null)
+  const idade = calcIdade(user?.data_nascimento)
   const avatar = getAvatarUrl(user?.nome, user?.avatar_seed)
-  const { label, color } = tipoBadge(user?.tipo)
-  const idade = calcularIdade(user?.data_nascimento)
+  const classeInfo = user?.classe ? CLASSES[user.classe] : null
+  const pct = user?.classe ? calcularPct(progresso, user.classe) : null
 
   useEffect(() => {
     if (!user) return
-    // Busca progresso
     if (user.classe) {
-      supabase.from('progresso')
-        .select('secao, requisito_index, concluido')
-        .eq('perfil_id', user.id)
-        .eq('classe', user.classe)
+      supabase.from('progresso').select('secao,requisito_index,concluido')
+        .eq('perfil_id', user.id).eq('classe', user.classe)
         .then(({ data }) => {
-          const map = {}
-          data?.forEach(r => { map[`${r.secao}-${r.requisito_index}`] = r.concluido })
-          setProgresso(map)
+          const m = {}
+          data?.forEach(r => { m[`${r.secao}-${r.requisito_index}`] = r.concluido })
+          setProgresso(m)
         })
     }
-    // Último check-in
-    supabase.from('checkins')
-      .select('*')
-      .eq('perfil_id', user.id)
-      .eq('aprovado', true)
-      .order('criado_em', { ascending: false })
-      .limit(1)
-      .then(({ data }) => { if (data?.[0]) setUltimoCheckin(data[0]) })
+    supabase.from('checkins').select('*').eq('perfil_id', user.id).eq('aprovado', true)
+      .order('criado_em', { ascending: false }).limit(1)
+      .then(({ data }) => data?.[0] && setUltimoCheckin(data[0]))
+    supabase.from('eventos').select('*').eq('ativo', true).limit(1).single()
+      .then(({ data }) => setEvento(data))
   }, [user])
 
-  const pct = user?.classe ? calcularPct(progresso, user.classe) : null
-  const classeInfo = user?.classe ? CLASSES[user.classe] : null
+  const DIAS = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado']
 
   return (
-    <div className="page">
-      {/* Perfil */}
-      <div className="profile-card">
-        <img
-          src={user?.foto_url || avatar}
-          alt={user?.nome}
-          className="profile-avatar"
-          onError={e => { e.target.src = avatar }}
-        />
-        <div className="profile-name">{user?.nome}</div>
-        <div className="profile-info">
-          {idade} anos
-          {user?.classe && ` · Classe ${user.classe}`}
-          {user?.unidade && ` · Unidade ${user.unidade}`}
-        </div>
-        <span className="profile-badge" style={{ background: color, color: color === '#f5c000' ? '#0d1b5e' : '#fff' }}>
-          {label}
-        </span>
-      </div>
-
-      {/* Stats */}
-      <div className="stat-row">
-        <div className="stat-box">
-          <div className="value">{user?.pontos ?? 0}</div>
-          <div className="label">⭐ Pontos</div>
-        </div>
-        <div className="stat-box">
-          <div className="value">{pct !== null ? `${pct}%` : '—'}</div>
-          <div className="label">📚 Progresso</div>
-        </div>
-      </div>
-
-      {/* Progresso da classe */}
-      {user?.classe && (
-        <div className="card">
-          <div className="card-title">
-            <span>{classeInfo?.icone}</span> Classe {user.classe}
-          </div>
-          <div className="prog-wrap">
-            <div className="prog-label">
-              <span>Progresso geral</span>
-              <span style={{ color: '#f5c000' }}>{pct}%</span>
+    <div className="app-shell">
+      <div className="scroll-area fade-in">
+        {/* Header */}
+        <div className="profile-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div className="profile-avatar">
+              <img src={user?.foto_url || avatar} alt={user?.nome}
+                onError={e => { e.target.style.display='none' }} />
             </div>
-            <div className="prog-bg">
-              <div className="prog-fill" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${classeInfo?.cor}, #f5c000)` }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p className="profile-sub">Olá, bem-vindo!</p>
+              <p className="profile-nome" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.nome}</p>
+              <div className="profile-badge">{TIPO_LABEL[user?.tipo] || user?.tipo}</div>
             </div>
           </div>
-          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 8 }}>
-            Livro do ano: {classeInfo?.livro}
-          </p>
         </div>
-      )}
 
-      {/* Último check-in */}
-      {ultimoCheckin && (
-        <div className="card">
-          <div className="card-title">📍 Último Check-in</div>
-          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
-            {new Date(ultimoCheckin.criado_em).toLocaleDateString('pt-BR', {
-              weekday: 'long', day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit'
-            })}
-          </p>
-          <p style={{ fontSize: 12, color: '#86efac', marginTop: 4, fontWeight: 700 }}>
-            ✅ Aprovado · +20 pontos
-          </p>
+        <div className="page-body">
+          {/* Stats */}
+          <div className="stat-grid">
+            <div className="stat-box">
+              <div className="stat-value" style={{ color: 'var(--dourado)' }}>{user?.pontos ?? 0}</div>
+              <div className="stat-label">⭐ Pontos</div>
+            </div>
+            <div className="stat-box">
+              <div className="stat-value">{pct !== null ? `${pct}%` : '—'}</div>
+              <div className="stat-label">📚 Progresso</div>
+            </div>
+          </div>
+
+          {/* Info pessoal */}
+          <div className="card">
+            <div className="card-pad">
+              <p className="card-title">Informações</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  ['👤 Idade', `${idade} anos`],
+                  user?.classe && ['📚 Classe', user.classe],
+                  user?.unidade && ['🏅 Unidade', user.unidade],
+                ].filter(Boolean).map(([k, v]) => (
+                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 13, color: 'var(--texto-suave)' }}>{k}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--texto)' }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Progresso da classe */}
+          {user?.classe && classeInfo && (
+            <div className="card card-pad">
+              <p className="card-title">Classe {user.classe} {classeInfo.icone}</p>
+              <div className="prog-wrap">
+                <div className="prog-label">
+                  <span>Progresso geral</span>
+                  <span style={{ color: classeInfo.cor, fontWeight: 800 }}>{pct}%</span>
+                </div>
+                <div className="prog-bg">
+                  <div className="prog-fill" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${classeInfo.cor}, var(--dourado))` }} />
+                </div>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--texto-suave)', marginTop: 8 }}>
+                Livro do ano: <strong>{classeInfo.livro}</strong>
+              </p>
+            </div>
+          )}
+
+          {/* Próxima reunião */}
+          {evento && (
+            <div className="card card-pad">
+              <p className="card-title">Próxima Reunião</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <p style={{ fontSize: 15, fontWeight: 700, color: 'var(--texto)' }}>{evento.nome}</p>
+                  <p style={{ fontSize: 12, color: 'var(--texto-suave)', marginTop: 2 }}>
+                    {DIAS[evento.dia_semana]} · até {evento.horario_limite?.slice(0,5)}
+                  </p>
+                </div>
+                <div style={{ background: 'var(--azul)', color: 'var(--dourado)', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700 }}>
+                  +20 pts
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Último check-in */}
+          {ultimoCheckin && (
+            <div className="card card-pad">
+              <p className="card-title">Último Check-in</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <p style={{ fontSize: 13, color: 'var(--texto-suave)' }}>
+                  {new Date(ultimoCheckin.criado_em).toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long' })}
+                </p>
+                <span className="badge badge-ok">+20 pts</span>
+              </div>
+            </div>
+          )}
+
+          {/* Sair */}
+          <button className="btn btn-outline-blue" onClick={logout} style={{ marginTop: 4 }}>
+            Sair da conta
+          </button>
         </div>
-      )}
-
-      {/* Sair */}
-      <button className="btn-secondary" onClick={logout} style={{ marginTop: 8 }}>
-        Sair da conta
-      </button>
+      </div>
     </div>
   )
 }

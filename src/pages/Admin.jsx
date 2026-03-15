@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { ORDEM_CLASSES, getAvatarUrl } from '../lib/classes'
 
 const TIPOS = ['desbravador','instrutor','conselheiro','diretoria']
-const DIAS_SEMANA = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado']
+const DIAS = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado']
 
 export default function Admin() {
   const { user } = useAuth()
@@ -13,346 +13,223 @@ export default function Admin() {
   const [eventos, setEventos] = useState([])
   const [loading, setLoading] = useState(true)
   const [busca, setBusca] = useState('')
-  const [modalMembro, setModalMembro] = useState(null) // null | 'novo' | objeto
+  const [modalMembro, setModalMembro] = useState(null)
   const [modalEvento, setModalEvento] = useState(false)
   const [modalPts, setModalPts] = useState(null)
 
   const carregar = async () => {
     setLoading(true)
-    const [{ data: m }, { data: e }] = await Promise.all([
+    const [{ data:m }, { data:e }] = await Promise.all([
       supabase.from('perfis').select('*').order('nome'),
-      supabase.from('eventos').select('*').order('criado_em', { ascending: false }),
+      supabase.from('eventos').select('*').order('criado_em', { ascending:false }),
     ])
-    setMembros(m || [])
-    setEventos(e || [])
-    setLoading(false)
+    setMembros(m||[]); setEventos(e||[]); setLoading(false)
   }
 
   useEffect(() => { carregar() }, [])
 
-  const filtrados = membros.filter(m =>
-    m.nome.toLowerCase().includes(busca.toLowerCase())
-  )
+  const filtrados = membros.filter(m => m.nome.toLowerCase().includes(busca.toLowerCase()))
+  const desbs = membros.filter(m => m.tipo==='desbravador')
+  const diretoria = membros.filter(m => m.tipo!=='desbravador')
 
   return (
-    <div className="page">
-      <div className="page-header" style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 2, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', marginBottom: 4 }}>
-          ⚙️ Acesso Master
+    <div className="app-shell">
+      <div className="scroll-area fade-in">
+        <div className="page-header">
+          <p className="page-header-eyebrow">⚙️ Acesso Master</p>
+          <p className="page-header-title">Administração</p>
+          <div className="tabs">
+            {[{id:'membros',l:'👥 Membros'},{id:'eventos',l:'📍 Eventos'}].map(a => (
+              <button key={a.id} className={`tab ${aba===a.id?'active':'inactive'}`} onClick={() => setAba(a.id)}>{a.l}</button>
+            ))}
+          </div>
         </div>
-        <div style={{ fontSize: 20, fontWeight: 900, color: '#f5c000' }}>Administração</div>
-      </div>
 
-      {/* Abas */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-        {[
-          { id: 'membros', label: '👥 Membros' },
-          { id: 'eventos', label: '📍 Eventos' },
-        ].map(a => (
-          <button key={a.id} onClick={() => setAba(a.id)} style={{
-            flex: 1, padding: '10px', borderRadius: 10, fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'Nunito',
-            background: aba === a.id ? 'rgba(245,192,0,0.2)' : 'rgba(255,255,255,0.05)',
-            border: `1.5px solid ${aba === a.id ? '#f5c000' : 'rgba(255,255,255,0.1)'}`,
-            color: aba === a.id ? '#f5c000' : 'rgba(255,255,255,0.6)',
-          }}>{a.label}</button>
-        ))}
-      </div>
+        <div className="page-body">
+          {loading ? (
+            <div style={{ textAlign:'center', padding:40 }}><div className="spinner" style={{ margin:'0 auto', borderTopColor:'var(--azul)' }} /></div>
+          ) : aba === 'membros' ? (
+            <>
+              {/* Stats */}
+              <div className="stat-grid-3">
+                <div className="stat-box"><div className="stat-value">{membros.length}</div><div className="stat-label">Total</div></div>
+                <div className="stat-box"><div className="stat-value" style={{ color:'var(--azul)' }}>{desbs.length}</div><div className="stat-label">Desb.</div></div>
+                <div className="stat-box"><div className="stat-value" style={{ color:'var(--dourado)' }}>{diretoria.length}</div><div className="stat-label">Direção</div></div>
+              </div>
 
-      {loading ? <div className="spinner" style={{ margin: '30px auto' }} /> : (
+              {/* Busca + novo */}
+              <div style={{ display:'flex', gap:8 }}>
+                <div className="search-bar" style={{ flex:1 }}>
+                  <span style={{ color:'var(--texto-suave)', fontSize:14 }}>🔍</span>
+                  <input placeholder="Buscar membro..." value={busca} onChange={e => setBusca(e.target.value)} />
+                </div>
+                <button className="btn btn-blue btn-sm btn-icon" onClick={() => setModalMembro('novo')}>➕</button>
+              </div>
 
-        aba === 'membros' ? (
-          <>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              <input
-                className="field-input" style={{ flex: 1 }}
-                placeholder="🔍 Buscar membro..."
-                value={busca}
-                onChange={e => setBusca(e.target.value)}
-              />
-              <button className="btn-primary" style={{ whiteSpace: 'nowrap', padding: '0 16px' }}
-                onClick={() => setModalMembro('novo')}>
-                ➕
+              {filtrados.length === 0 ? (
+                <div className="empty-state"><div className="empty-icon">👥</div>Nenhum membro encontrado.</div>
+              ) : (
+                <div className="card">
+                  {filtrados.map(m => (
+                    <div key={m.id} className="list-row">
+                      <div className="avatar-init" style={{ width:40, height:40, background:'#eef2ff', color:'var(--azul)', fontSize:14, flexShrink:0 }}>
+                        <img src={m.foto_url||getAvatarUrl(m.nome)} alt={m.nome} onError={e=>{e.target.style.display='none'}} />
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <p style={{ fontSize:13, fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.nome}</p>
+                        <p style={{ fontSize:11, color:'var(--texto-suave)', marginTop:1 }}>
+                          {m.tipo}{m.classe?` · ${m.classe}`:''}{m.unidade?` · ${m.unidade}`:''} · {m.pontos??0} pts
+                        </p>
+                      </div>
+                      <div style={{ display:'flex', gap:4 }}>
+                        <button className="btn btn-outline-blue btn-sm" onClick={() => setModalPts(m)}>⭐</button>
+                        <button className="btn btn-outline-blue btn-sm" onClick={() => setModalMembro(m)}>✏️</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <button className="btn btn-blue" onClick={() => setModalEvento(true)} style={{ minHeight:48 }}>
+                ➕ Novo Evento / Local
               </button>
-            </div>
-
-            {/* Stats */}
-            <div className="stat-row" style={{ marginBottom: 12 }}>
-              <div className="stat-box">
-                <div className="value">{membros.filter(m=>m.tipo==='desbravador').length}</div>
-                <div className="label">Desbravadores</div>
-              </div>
-              <div className="stat-box">
-                <div className="value">{membros.filter(m=>m.tipo!=='desbravador').length}</div>
-                <div className="label">Diretoria</div>
-              </div>
-            </div>
-
-            {filtrados.map(m => (
-              <div key={m.id} className="member-row">
-                <img src={m.foto_url || getAvatarUrl(m.nome)} alt={m.nome}
-                  className="member-avatar-sm" onError={e => { e.target.src = getAvatarUrl(m.nome) }} />
-                <div style={{ flex: 1 }}>
-                  <div className="member-name">{m.nome}</div>
-                  <div className="member-sub">
-                    {m.tipo} {m.classe ? `· ${m.classe}` : ''} {m.unidade ? `· ${m.unidade}` : ''} · {m.pontos ?? 0} pts
+              {eventos.map(ev => (
+                <div key={ev.id} className="card card-pad">
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                        <span style={{ width:8, height:8, borderRadius:'50%', background:ev.ativo?'#16a34a':'#9ca3af', display:'inline-block' }} />
+                        <p style={{ fontSize:15, fontWeight:700 }}>{ev.nome}</p>
+                      </div>
+                      <p style={{ fontSize:12, color:'var(--texto-suave)' }}>
+                        📅 {DIAS[ev.dia_semana]} · ⏰ até {ev.horario_limite?.slice(0,5)}<br/>
+                        📍 {ev.latitude?.toFixed(5)}, {ev.longitude?.toFixed(5)}
+                      </p>
+                    </div>
+                    <button className={`btn btn-sm ${ev.ativo?'btn-danger':'btn-outline-blue'}`}
+                      onClick={async () => { await supabase.from('eventos').update({ ativo:!ev.ativo }).eq('id',ev.id); carregar() }}>
+                      {ev.ativo ? 'Desativar' : 'Ativar'}
+                    </button>
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <button className="btn-secondary" style={{ padding: '6px 10px', fontSize: 12 }}
-                    onClick={() => setModalPts(m)}>⭐</button>
-                  <button className="btn-secondary" style={{ padding: '6px 10px', fontSize: 12 }}
-                    onClick={() => setModalMembro(m)}>✏️</button>
-                </div>
-              </div>
-            ))}
-          </>
-        ) : (
-          <>
-            <button className="btn-primary" onClick={() => setModalEvento(true)} style={{ marginBottom: 14 }}>
-              ➕ Novo Evento / Local
-            </button>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
 
-            {eventos.map(ev => (
-              <div key={ev.id} className="card" style={{ marginBottom: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <div style={{ fontWeight: 800, color: ev.ativo ? '#86efac' : 'rgba(255,255,255,0.4)', fontSize: 15 }}>
-                      {ev.ativo ? '🟢' : '⚫'} {ev.nome}
-                    </div>
-                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
-                      📅 {DIAS_SEMANA[ev.dia_semana]} · ⏰ até {ev.horario_limite?.slice(0,5)}<br/>
-                      📍 {ev.latitude?.toFixed(5)}, {ev.longitude?.toFixed(5)}
-                    </div>
-                  </div>
-                  <button className="btn-danger" onClick={async () => {
-                    await supabase.from('eventos').update({ ativo: !ev.ativo }).eq('id', ev.id)
-                    carregar()
-                  }}>
-                    {ev.ativo ? 'Desativar' : 'Ativar'}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </>
-        )
-      )}
-
-      {/* Modal: Editar / Novo Membro */}
-      {modalMembro && (
-        <ModalMembro
-          membro={modalMembro === 'novo' ? null : modalMembro}
-          onClose={() => setModalMembro(null)}
-          onSave={carregar}
-        />
-      )}
-
-      {/* Modal: Novo Evento */}
-      {modalEvento && (
-        <ModalEvento onClose={() => setModalEvento(false)} onSave={carregar} />
-      )}
-
-      {/* Modal: Pontos */}
-      {modalPts && (
-        <ModalPontosAdmin membro={modalPts} onClose={() => setModalPts(null)} onSave={carregar} atribuidoPor={user.id} />
-      )}
+      {modalMembro && <ModalMembro membro={modalMembro==='novo'?null:modalMembro} onClose={()=>setModalMembro(null)} onSave={carregar} />}
+      {modalEvento && <ModalEvento onClose={()=>setModalEvento(false)} onSave={carregar} userId={user.id} />}
+      {modalPts && <ModalPts membro={modalPts} onClose={()=>setModalPts(null)} onSave={carregar} userId={user.id} />}
     </div>
   )
 }
 
-// ── MODAL: Editar/Criar Membro ────────────────────────────────
 function ModalMembro({ membro, onClose, onSave }) {
-  const [form, setForm] = useState({
-    nome: membro?.nome || '',
-    data_nascimento: membro?.data_nascimento || '',
-    tipo: membro?.tipo || 'desbravador',
-    classe: membro?.classe || '',
-    unidade: membro?.unidade || '',
-  })
+  const [form, setForm] = useState({ nome:membro?.nome||'', data_nascimento:membro?.data_nascimento||'', tipo:membro?.tipo||'desbravador', classe:membro?.classe||'', unidade:membro?.unidade||'' })
   const [saving, setSaving] = useState(false)
   const [erro, setErro] = useState('')
   const [confirmDel, setConfirmDel] = useState(false)
-
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const set = (k,v) => setForm(f=>({...f,[k]:v}))
 
   const salvar = async () => {
-    if (!form.nome.trim() || !form.data_nascimento) { setErro('Nome e data de nascimento são obrigatórios.'); return }
+    if (!form.nome.trim()||!form.data_nascimento) { setErro('Nome e data são obrigatórios.'); return }
     setSaving(true)
-    if (membro) {
-      await supabase.from('perfis').update({ ...form }).eq('id', membro.id)
-    } else {
-      await supabase.from('perfis').insert({ ...form, pontos: 0 })
-    }
+    if (membro) await supabase.from('perfis').update({...form}).eq('id',membro.id)
+    else await supabase.from('perfis').insert({...form,pontos:0})
     setSaving(false); onSave(); onClose()
   }
 
-  const excluir = async () => {
-    await supabase.from('perfis').delete().eq('id', membro.id)
-    onSave(); onClose()
-  }
-
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-sheet" onClick={e => e.stopPropagation()}>
-        <div className="modal-handle" />
-        <div className="modal-title">{membro ? 'Editar Membro' : 'Novo Membro'}</div>
-
-        <div className="field-group">
-          <label>Nome Completo</label>
-          <input className="field-input" value={form.nome} onChange={e => set('nome', e.target.value)} />
-        </div>
-        <div className="field-group">
-          <label>Data de Nascimento</label>
-          <input className="field-input" type="date" value={form.data_nascimento} onChange={e => set('data_nascimento', e.target.value)} />
-        </div>
-        <div className="field-group">
-          <label>Tipo de Acesso</label>
-          <select className="field-select" value={form.tipo} onChange={e => set('tipo', e.target.value)}>
-            {TIPOS.map(t => <option key={t}>{t}</option>)}
-          </select>
-        </div>
-        <div className="field-group">
-          <label>Classe</label>
-          <select className="field-select" value={form.classe} onChange={e => set('classe', e.target.value)}>
-            <option value="">— sem classe —</option>
-            {ORDEM_CLASSES.map(c => <option key={c}>{c}</option>)}
-          </select>
-        </div>
-        <div className="field-group">
-          <label>Unidade</label>
-          <input className="field-input" placeholder="Ex: Águia" value={form.unidade} onChange={e => set('unidade', e.target.value)} />
-        </div>
-
-        {erro && <div className="error-msg">{erro}</div>}
-
-        <button className="btn-primary" onClick={salvar} disabled={saving} style={{ marginBottom: 8 }}>
-          {saving ? 'Salvando...' : '💾 Salvar'}
-        </button>
-
-        {membro && !confirmDel && (
-          <button className="btn-danger" style={{ width: '100%', padding: 12 }} onClick={() => setConfirmDel(true)}>
-            🗑️ Excluir Membro
-          </button>
-        )}
-        {confirmDel && (
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ color: '#fca5a5', fontSize: 13, marginBottom: 8 }}>Tem certeza? Esta ação não pode ser desfeita.</p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn-secondary" onClick={() => setConfirmDel(false)}>Cancelar</button>
-              <button className="btn-danger" style={{ flex: 1, padding: 12 }} onClick={excluir}>Confirmar Exclusão</button>
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-sheet" onClick={e=>e.stopPropagation()}>
+        <div className="modal-handle-bar" />
+        <div className="modal-header"><p className="modal-title">{membro?'Editar Membro':'Novo Membro'}</p></div>
+        <div className="modal-body">
+          <div className="field-wrap-light"><label className="field-label">Nome Completo</label><input className="input-light" value={form.nome} onChange={e=>set('nome',e.target.value)} /></div>
+          <div className="field-wrap-light"><label className="field-label">Data de Nascimento</label><input className="input-light" type="date" value={form.data_nascimento} onChange={e=>set('data_nascimento',e.target.value)} /></div>
+          <div className="field-wrap-light"><label className="field-label">Tipo de Acesso</label><select className="select-light" value={form.tipo} onChange={e=>set('tipo',e.target.value)}>{TIPOS.map(t=><option key={t}>{t}</option>)}</select></div>
+          <div className="field-wrap-light"><label className="field-label">Classe</label><select className="select-light" value={form.classe} onChange={e=>set('classe',e.target.value)}><option value="">— sem classe —</option>{ORDEM_CLASSES.map(c=><option key={c}>{c}</option>)}</select></div>
+          <div className="field-wrap-light"><label className="field-label">Unidade</label><input className="input-light" placeholder="Ex: Águia" value={form.unidade} onChange={e=>set('unidade',e.target.value)} /></div>
+          {erro && <div className="error-msg" style={{ marginBottom:12 }}>{erro}</div>}
+          <button className="btn btn-blue" onClick={salvar} disabled={saving} style={{ marginBottom:8 }}>{saving?'Salvando...':'💾 Salvar'}</button>
+          {membro && !confirmDel && <button className="btn btn-danger" onClick={()=>setConfirmDel(true)}>🗑️ Excluir Membro</button>}
+          {confirmDel && (
+            <div>
+              <p style={{ color:'var(--vermelho)', fontSize:13, textAlign:'center', marginBottom:8 }}>Tem certeza? Esta ação não pode ser desfeita.</p>
+              <div style={{ display:'flex', gap:8 }}>
+                <button className="btn btn-outline-blue" onClick={()=>setConfirmDel(false)} style={{ minHeight:44 }}>Cancelar</button>
+                <button className="btn btn-danger" style={{ flex:1 }} onClick={async()=>{ await supabase.from('perfis').delete().eq('id',membro.id); onSave(); onClose() }}>Confirmar</button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )
 }
 
-// ── MODAL: Novo Evento ────────────────────────────────────────
-function ModalEvento({ onClose, onSave }) {
-  const [form, setForm] = useState({
-    nome: '', latitude: -23.542245, longitude: -46.886757,
-    dia_semana: 0, horario_limite: '09:00', ativo: true,
-  })
+function ModalEvento({ onClose, onSave, userId }) {
+  const [form, setForm] = useState({ nome:'', latitude:-23.542245, longitude:-46.886757, dia_semana:0, horario_limite:'09:00', ativo:true })
   const [saving, setSaving] = useState(false)
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const set = (k,v) => setForm(f=>({...f,[k]:v}))
 
   const salvar = async () => {
+    if (!form.nome.trim()) return
     setSaving(true)
-    // Desativa outros eventos se este for ativo
-    if (form.ativo) await supabase.from('eventos').update({ ativo: false }).neq('id', 0)
-    await supabase.from('eventos').insert({ ...form, horario_limite: form.horario_limite + ':00' })
+    if (form.ativo) await supabase.from('eventos').update({ ativo:false }).neq('id',0)
+    await supabase.from('eventos').insert({ ...form, horario_limite:form.horario_limite+':00', criado_por:userId })
     setSaving(false); onSave(); onClose()
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-sheet" onClick={e => e.stopPropagation()}>
-        <div className="modal-handle" />
-        <div className="modal-title">Novo Evento</div>
-
-        <div className="field-group">
-          <label>Nome do Evento</label>
-          <input className="field-input" placeholder="Ex: Reunião Especial" value={form.nome} onChange={e => set('nome', e.target.value)} />
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-sheet" onClick={e=>e.stopPropagation()}>
+        <div className="modal-handle-bar" />
+        <div className="modal-header"><p className="modal-title">Novo Evento</p></div>
+        <div className="modal-body">
+          <div className="field-wrap-light"><label className="field-label">Nome do Evento</label><input className="input-light" placeholder="Ex: Reunião Especial" value={form.nome} onChange={e=>set('nome',e.target.value)} /></div>
+          <div className="field-wrap-light"><label className="field-label">Dia da Semana</label><select className="select-light" value={form.dia_semana} onChange={e=>set('dia_semana',parseInt(e.target.value))}>{DIAS.map((d,i)=><option key={i} value={i}>{d}</option>)}</select></div>
+          <div className="field-wrap-light"><label className="field-label">Horário Limite</label><input className="input-light" type="time" value={form.horario_limite} onChange={e=>set('horario_limite',e.target.value)} /></div>
+          <div className="field-wrap-light"><label className="field-label">Latitude</label><input className="input-light" type="number" step="0.000001" value={form.latitude} onChange={e=>set('latitude',parseFloat(e.target.value))} /></div>
+          <div className="field-wrap-light"><label className="field-label">Longitude</label><input className="input-light" type="number" step="0.000001" value={form.longitude} onChange={e=>set('longitude',parseFloat(e.target.value))} /></div>
+          <button className="btn btn-blue" onClick={salvar} disabled={saving}>{saving?'Criando...':'📍 Criar Evento'}</button>
         </div>
-        <div className="field-group">
-          <label>Dia da Semana</label>
-          <select className="field-select" value={form.dia_semana} onChange={e => set('dia_semana', parseInt(e.target.value))}>
-            {DIAS_SEMANA.map((d,i) => <option key={i} value={i}>{d}</option>)}
-          </select>
-        </div>
-        <div className="field-group">
-          <label>Horário Limite</label>
-          <input className="field-input" type="time" value={form.horario_limite} onChange={e => set('horario_limite', e.target.value)} />
-        </div>
-        <div className="field-group">
-          <label>Latitude</label>
-          <input className="field-input" type="number" step="0.000001" value={form.latitude} onChange={e => set('latitude', parseFloat(e.target.value))} />
-        </div>
-        <div className="field-group">
-          <label>Longitude</label>
-          <input className="field-input" type="number" step="0.000001" value={form.longitude} onChange={e => set('longitude', parseFloat(e.target.value))} />
-        </div>
-
-        <button className="btn-primary" onClick={salvar} disabled={saving}>
-          {saving ? 'Criando...' : '📍 Criar Evento'}
-        </button>
       </div>
     </div>
   )
 }
 
-// ── MODAL: Pontos Admin ───────────────────────────────────────
-function ModalPontosAdmin({ membro, onClose, onSave, atribuidoPor }) {
+function ModalPts({ membro, onClose, onSave, userId }) {
   const [qtd, setQtd] = useState('')
-  const [categoria, setCategoria] = useState('Disciplina')
+  const [cat, setCat] = useState('Disciplina')
   const [motivo, setMotivo] = useState('')
   const [saving, setSaving] = useState(false)
-  const categorias = ['Disciplina','Participação','Evolução na classe','Espírito de equipe','Livre']
+  const cats = ['Disciplina','Participação','Evolução na classe','Espírito de equipe','Livre']
 
   const salvar = async () => {
-    const pts = parseInt(qtd)
-    if (!pts) return
+    const pts = parseInt(qtd); if (!pts) return
     setSaving(true)
-    await supabase.from('perfis').update({ pontos: (membro.pontos || 0) + pts }).eq('id', membro.id)
-    await supabase.from('pontos_historico').insert({
-      perfil_id: membro.id, pontos: pts,
-      motivo: categoria === 'Livre' ? motivo : categoria,
-      atribuido_por: atribuidoPor,
-    })
+    await supabase.from('perfis').update({ pontos:(membro.pontos||0)+pts }).eq('id',membro.id)
+    await supabase.from('pontos_historico').insert({ perfil_id:membro.id, pontos:pts, motivo:cat==='Livre'?motivo:cat, atribuido_por:userId })
     setSaving(false); onSave(); onClose()
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-sheet" onClick={e => e.stopPropagation()}>
-        <div className="modal-handle" />
-        <div className="modal-title">Pontos — {membro.nome}</div>
-        <div style={{ textAlign: 'center', fontSize: 32, fontWeight: 900, color: '#f5c000', marginBottom: 16 }}>
-          {membro.pontos ?? 0} pts atuais
-        </div>
-
-        <div className="field-group">
-          <label>Categoria</label>
-          <select className="field-select" value={categoria} onChange={e => setCategoria(e.target.value)}>
-            {categorias.map(c => <option key={c}>{c}</option>)}
-          </select>
-        </div>
-        {categoria === 'Livre' && (
-          <div className="field-group">
-            <label>Motivo</label>
-            <input className="field-input" placeholder="Descreva o motivo..." value={motivo} onChange={e => setMotivo(e.target.value)} />
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-sheet" onClick={e=>e.stopPropagation()}>
+        <div className="modal-handle-bar" />
+        <div className="modal-header"><p className="modal-title">Pontos — {membro.nome}</p><p style={{ fontSize:13, color:'var(--texto-suave)', marginTop:2 }}>{membro.pontos??0} pts atuais</p></div>
+        <div className="modal-body">
+          <div className="field-wrap-light"><label className="field-label">Categoria</label><select className="select-light" value={cat} onChange={e=>setCat(e.target.value)}>{cats.map(c=><option key={c}>{c}</option>)}</select></div>
+          {cat==='Livre'&&<div className="field-wrap-light"><label className="field-label">Motivo</label><input className="input-light" placeholder="Descreva..." value={motivo} onChange={e=>setMotivo(e.target.value)} /></div>}
+          <div className="field-wrap-light"><label className="field-label">Quantidade (negativo para remover)</label><input className="input-light" type="number" placeholder="Ex: 10 ou -5" value={qtd} onChange={e=>setQtd(e.target.value)} /></div>
+          <div style={{ display:'flex', gap:8 }}>
+            <button className="btn btn-outline-blue" onClick={onClose} style={{ minHeight:48 }}>Cancelar</button>
+            <button className="btn btn-blue" onClick={salvar} disabled={saving} style={{ flex:1 }}>{saving?'Salvando...':'⭐ Lançar'}</button>
           </div>
-        )}
-        <div className="field-group">
-          <label>Quantidade (negativo para remover)</label>
-          <input className="field-input" type="number" placeholder="Ex: 10 ou -5" value={qtd} onChange={e => setQtd(e.target.value)} />
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <button className="btn-secondary" onClick={onClose}>Cancelar</button>
-          <button className="btn-primary" onClick={salvar} disabled={saving} style={{ flex: 1 }}>
-            {saving ? 'Salvando...' : '⭐ Lançar'}
-          </button>
         </div>
       </div>
     </div>

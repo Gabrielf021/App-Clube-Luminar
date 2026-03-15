@@ -1,164 +1,233 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
-const LIVROS_AT = [
-  'Gênesis','Êxodo','Levítico','Números','Deuteronômio','Josué','Juízes','Rute',
-  '1 Samuel','2 Samuel','1 Reis','2 Reis','1 Crônicas','2 Crônicas','Esdras','Neemias',
-  'Ester','Jó','Salmos','Provérbios','Eclesiastes','Cantares','Isaías','Jeremias',
-  'Lamentações','Ezequiel','Daniel','Oséias','Joel','Amós','Obadias','Jonas','Miquéias',
-  'Naum','Habacuque','Sofonias','Ageu','Zacarias','Malaquias',
+const LIVROS = [
+  { nome:'Gênesis', abrev:'gn', caps:50, grupo:'AT' },
+  { nome:'Êxodo', abrev:'ex', caps:40, grupo:'AT' },
+  { nome:'Levítico', abrev:'lv', caps:27, grupo:'AT' },
+  { nome:'Números', abrev:'nm', caps:36, grupo:'AT' },
+  { nome:'Deuteronômio', abrev:'dt', caps:34, grupo:'AT' },
+  { nome:'Josué', abrev:'js', caps:24, grupo:'AT' },
+  { nome:'Juízes', abrev:'jz', caps:21, grupo:'AT' },
+  { nome:'Rute', abrev:'rt', caps:4, grupo:'AT' },
+  { nome:'1 Samuel', abrev:'1sm', caps:31, grupo:'AT' },
+  { nome:'2 Samuel', abrev:'2sm', caps:24, grupo:'AT' },
+  { nome:'1 Reis', abrev:'1rs', caps:22, grupo:'AT' },
+  { nome:'2 Reis', abrev:'2rs', caps:25, grupo:'AT' },
+  { nome:'1 Crônicas', abrev:'1cr', caps:29, grupo:'AT' },
+  { nome:'2 Crônicas', abrev:'2cr', caps:36, grupo:'AT' },
+  { nome:'Esdras', abrev:'ed', caps:10, grupo:'AT' },
+  { nome:'Neemias', abrev:'ne', caps:13, grupo:'AT' },
+  { nome:'Ester', abrev:'et', caps:10, grupo:'AT' },
+  { nome:'Jó', abrev:'jo', caps:42, grupo:'AT' },
+  { nome:'Salmos', abrev:'sl', caps:150, grupo:'AT' },
+  { nome:'Provérbios', abrev:'pv', caps:31, grupo:'AT' },
+  { nome:'Eclesiastes', abrev:'ec', caps:12, grupo:'AT' },
+  { nome:'Cantares', abrev:'ct', caps:8, grupo:'AT' },
+  { nome:'Isaías', abrev:'is', caps:66, grupo:'AT' },
+  { nome:'Jeremias', abrev:'jr', caps:52, grupo:'AT' },
+  { nome:'Lamentações', abrev:'lm', caps:5, grupo:'AT' },
+  { nome:'Ezequiel', abrev:'ez', caps:48, grupo:'AT' },
+  { nome:'Daniel', abrev:'dn', caps:12, grupo:'AT' },
+  { nome:'Oséias', abrev:'os', caps:14, grupo:'AT' },
+  { nome:'Joel', abrev:'jl', caps:3, grupo:'AT' },
+  { nome:'Amós', abrev:'am', caps:9, grupo:'AT' },
+  { nome:'Obadias', abrev:'ob', caps:1, grupo:'AT' },
+  { nome:'Jonas', abrev:'jn', caps:4, grupo:'AT' },
+  { nome:'Miquéias', abrev:'mq', caps:7, grupo:'AT' },
+  { nome:'Naum', abrev:'na', caps:3, grupo:'AT' },
+  { nome:'Habacuque', abrev:'hb', caps:3, grupo:'AT' },
+  { nome:'Sofonias', abrev:'sf', caps:3, grupo:'AT' },
+  { nome:'Ageu', abrev:'ag', caps:2, grupo:'AT' },
+  { nome:'Zacarias', abrev:'zc', caps:14, grupo:'AT' },
+  { nome:'Malaquias', abrev:'ml', caps:4, grupo:'AT' },
+  { nome:'Mateus', abrev:'mt', caps:28, grupo:'NT' },
+  { nome:'Marcos', abrev:'mc', caps:16, grupo:'NT' },
+  { nome:'Lucas', abrev:'lc', caps:24, grupo:'NT' },
+  { nome:'João', abrev:'jo', caps:21, grupo:'NT' },
+  { nome:'Atos', abrev:'at', caps:28, grupo:'NT' },
+  { nome:'Romanos', abrev:'rm', caps:16, grupo:'NT' },
+  { nome:'1 Coríntios', abrev:'1co', caps:16, grupo:'NT' },
+  { nome:'2 Coríntios', abrev:'2co', caps:13, grupo:'NT' },
+  { nome:'Gálatas', abrev:'gl', caps:6, grupo:'NT' },
+  { nome:'Efésios', abrev:'ef', caps:6, grupo:'NT' },
+  { nome:'Filipenses', abrev:'fp', caps:4, grupo:'NT' },
+  { nome:'Colossenses', abrev:'cl', caps:4, grupo:'NT' },
+  { nome:'1 Tessalonicenses', abrev:'1ts', caps:5, grupo:'NT' },
+  { nome:'2 Tessalonicenses', abrev:'2ts', caps:3, grupo:'NT' },
+  { nome:'1 Timóteo', abrev:'1tm', caps:6, grupo:'NT' },
+  { nome:'2 Timóteo', abrev:'2tm', caps:4, grupo:'NT' },
+  { nome:'Tito', abrev:'tt', caps:3, grupo:'NT' },
+  { nome:'Filemom', abrev:'fm', caps:1, grupo:'NT' },
+  { nome:'Hebreus', abrev:'hb', caps:13, grupo:'NT' },
+  { nome:'Tiago', abrev:'tg', caps:5, grupo:'NT' },
+  { nome:'1 Pedro', abrev:'1pe', caps:5, grupo:'NT' },
+  { nome:'2 Pedro', abrev:'2pe', caps:3, grupo:'NT' },
+  { nome:'1 João', abrev:'1jo', caps:5, grupo:'NT' },
+  { nome:'2 João', abrev:'2jo', caps:1, grupo:'NT' },
+  { nome:'3 João', abrev:'3jo', caps:1, grupo:'NT' },
+  { nome:'Judas', abrev:'jd', caps:1, grupo:'NT' },
+  { nome:'Apocalipse', abrev:'ap', caps:22, grupo:'NT' },
 ]
-const LIVROS_NT = [
-  'Mateus','Marcos','Lucas','João','Atos','Romanos','1 Coríntios','2 Coríntios',
-  'Gálatas','Efésios','Filipenses','Colossenses','1 Tessalonicenses','2 Tessalonicenses',
-  '1 Timóteo','2 Timóteo','Tito','Filemom','Hebreus','Tiago','1 Pedro','2 Pedro',
-  '1 João','2 João','3 João','Judas','Apocalipse',
-]
-const TODOS_LIVROS = [...LIVROS_AT, ...LIVROS_NT]
-
-// Mapeamento para a API
-const API_MAP = {
-  'Gênesis':'GN','Êxodo':'EX','Levítico':'LV','Números':'NM','Deuteronômio':'DT',
-  'Josué':'JS','Juízes':'JZ','Rute':'RT','1 Samuel':'1SM','2 Samuel':'2SM',
-  '1 Reis':'1RS','2 Reis':'2RS','1 Crônicas':'1CR','2 Crônicas':'2CR','Esdras':'ED',
-  'Neemias':'NE','Ester':'ET','Jó':'JO','Salmos':'SL','Provérbios':'PV',
-  'Eclesiastes':'EC','Cantares':'CT','Isaías':'IS','Jeremias':'JR',
-  'Lamentações':'LM','Ezequiel':'EZ','Daniel':'DN','Oséias':'OS','Joel':'JL',
-  'Amós':'AM','Obadias':'OB','Jonas':'JN','Miquéias':'MQ','Naum':'NA',
-  'Habacuque':'HB','Sofonias':'SF','Ageu':'AG','Zacarias':'ZC','Malaquias':'ML',
-  'Mateus':'MT','Marcos':'MC','Lucas':'LC','João':'JO','Atos':'AT','Romanos':'RM',
-  '1 Coríntios':'1CO','2 Coríntios':'2CO','Gálatas':'GL','Efésios':'EF',
-  'Filipenses':'FP','Colossenses':'CL','1 Tessalonicenses':'1TS','2 Tessalonicenses':'2TS',
-  '1 Timóteo':'1TM','2 Timóteo':'2TM','Tito':'TT','Filemom':'FM','Hebreus':'HB',
-  'Tiago':'TG','1 Pedro':'1PE','2 Pedro':'2PE','1 João':'1JO','2 João':'2JO',
-  '3 João':'3JO','Judas':'JD','Apocalipse':'AP',
-}
 
 export default function Biblia() {
-  const [livro, setLivro] = useState('João')
-  const [capitulo, setCapitulo] = useState(1)
+  const [livroIdx, setLivroIdx] = useState(43) // João
+  const [cap, setCap] = useState(1)
   const [versiculos, setVersiculos] = useState([])
   const [loading, setLoading] = useState(false)
-  const [totalCaps, setTotalCaps] = useState(21)
-  const [busca, setBusca] = useState('')
+  const [erro, setErro] = useState('')
   const [showLivros, setShowLivros] = useState(false)
+  const [busca, setBusca] = useState('')
+  const scrollRef = useRef(null)
 
-  useEffect(() => { buscarCapitulo() }, [livro, capitulo])
+  const livro = LIVROS[livroIdx]
 
-  const buscarCapitulo = async () => {
-    setLoading(true)
+  useEffect(() => { buscarCap() }, [livroIdx, cap])
+
+  const buscarCap = async () => {
+    setLoading(true); setErro(''); setVersiculos([])
     try {
-      const abrev = API_MAP[livro] || 'JO'
-      const res = await fetch(`https://bible-api.com/${abrev}+${capitulo}?translation=almeida`)
+      const res = await fetch(
+        `https://www.abibliadigital.com.br/api/verses/nvi/${livro.abrev}/${cap}`,
+        { headers: { 'Content-Type': 'application/json' } }
+      )
       if (!res.ok) throw new Error()
       const data = await res.json()
       setVersiculos(data.verses || [])
     } catch {
-      // Fallback para API alternativa em português
+      // Fallback: bible-api.com
       try {
-        const res = await fetch(`https://www.abibliadigital.com.br/api/verses/nvi/${API_MAP[livro]?.toLowerCase()}/${capitulo}`, {
-          headers: { 'Authorization': 'Bearer sem-token' }
-        })
+        const abrevMap = { jo:'John', mt:'Matthew', mc:'Mark', lc:'Luke', at:'Acts', rm:'Romans', gn:'Genesis', ex:'Exodus', sl:'Psalms', pv:'Proverbs', ap:'Revelation' }
+        const eng = abrevMap[livro.abrev]
+        if (!eng) throw new Error()
+        const res = await fetch(`https://bible-api.com/${eng}+${cap}?translation=almeida`)
+        if (!res.ok) throw new Error()
         const data = await res.json()
-        if (data.verses) setVersiculos(data.verses.map(v => ({ verse: v.number, text: v.text })))
+        setVersiculos((data.verses||[]).map(v => ({ number: v.verse, text: v.text })))
       } catch {
-        setVersiculos([{ verse: 1, text: 'Não foi possível carregar. Verifique sua conexão.' }])
+        setErro('Não foi possível carregar. Verifique sua conexão.')
       }
     }
     setLoading(false)
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const livrosFiltrados = TODOS_LIVROS.filter(l =>
-    l.toLowerCase().includes(busca.toLowerCase())
-  )
+  const livrosFiltrados = LIVROS.filter(l => l.nome.toLowerCase().includes(busca.toLowerCase()))
+  const atFilt = livrosFiltrados.filter(l => l.grupo === 'AT')
+  const ntFilt  = livrosFiltrados.filter(l => l.grupo === 'NT')
+
+  const irCap = (n) => { const c = Math.max(1, Math.min(livro.caps, n)); setCap(c) }
+  const irLivro = (idx) => { setLivroIdx(idx); setCap(1); setShowLivros(false); setBusca('') }
 
   return (
-    <div className="page">
-      <div className="page-header" style={{ marginBottom: 16 }}>
-        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 2, color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', marginBottom: 4 }}>
-          📖 Palavra de Deus
-        </div>
-        <div style={{ fontSize: 20, fontWeight: 900, color: '#f5c000' }}>Bíblia Sagrada</div>
-      </div>
-
-      {/* Seletor */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <button
-          onClick={() => setShowLivros(true)}
-          style={{ flex: 1, padding: '10px 14px', background: 'rgba(26,42,142,0.6)', border: '1.5px solid rgba(245,192,0,0.3)', borderRadius: 10, color: '#f5c000', fontFamily: 'Nunito', fontWeight: 800, fontSize: 14, cursor: 'pointer', textAlign: 'left' }}
-        >
-          📖 {livro}
-        </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button
-            onClick={() => setCapitulo(c => Math.max(1, c-1))}
-            style={{ width: 36, height: 36, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(245,192,0,0.2)', borderRadius: 8, color: '#fff', fontSize: 18, cursor: 'pointer' }}
-          >‹</button>
-          <span style={{ fontSize: 16, fontWeight: 800, color: '#f5c000', minWidth: 24, textAlign: 'center' }}>{capitulo}</span>
-          <button
-            onClick={() => setCapitulo(c => c+1)}
-            style={{ width: 36, height: 36, background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(245,192,0,0.2)', borderRadius: 8, color: '#fff', fontSize: 18, cursor: 'pointer' }}
-          >›</button>
-        </div>
-      </div>
-
-      {/* Versículos */}
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: 40 }}>
-          <div className="spinner" style={{ margin: '0 auto' }} />
-        </div>
-      ) : (
-        <div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#f5c000', marginBottom: 12 }}>
-            {livro} {capitulo}
+    <div className="app-shell">
+      <div className="scroll-area fade-in" ref={scrollRef}>
+        {/* Header */}
+        <div className="page-header">
+          <p className="page-header-eyebrow">📖 Palavra de Deus</p>
+          <p className="page-header-title">Bíblia Sagrada</p>
+          {/* Controles */}
+          <div style={{ display:'flex', gap:8, marginTop:12 }}>
+            <button onClick={() => setShowLivros(true)} style={{
+              flex:1, background:'rgba(255,255,255,0.12)', border:'none', borderRadius:'var(--radius-sm)',
+              padding:'9px 12px', display:'flex', justifyContent:'space-between', alignItems:'center',
+              cursor:'pointer', color:'var(--dourado)', fontFamily:'Plus Jakarta Sans', fontWeight:700, fontSize:13,
+            }}>
+              <span>{livro.nome}</span>
+              <span style={{ color:'rgba(255,255,255,0.4)', fontSize:10 }}>▾</span>
+            </button>
+            <div style={{ display:'flex', alignItems:'center', gap:0, background:'rgba(255,255,255,0.12)', borderRadius:'var(--radius-sm)', overflow:'hidden' }}>
+              <button onClick={() => irCap(cap-1)} disabled={cap<=1} style={{ width:36, height:38, border:'none', background:'transparent', color:'rgba(255,255,255,0.6)', fontSize:18, cursor:'pointer', fontFamily:'Plus Jakarta Sans' }}>‹</button>
+              <span style={{ minWidth:28, textAlign:'center', fontSize:13, fontWeight:700, color:'var(--dourado)' }}>{cap}</span>
+              <button onClick={() => irCap(cap+1)} disabled={cap>=livro.caps} style={{ width:36, height:38, border:'none', background:'transparent', color:'rgba(255,255,255,0.6)', fontSize:18, cursor:'pointer', fontFamily:'Plus Jakarta Sans' }}>›</button>
+            </div>
           </div>
-          {versiculos.map(v => (
-            <div key={v.verse} className="bible-verse">
-              <strong>{v.verse}</strong>
-              {v.text}
+        </div>
+
+        <div className="page-body">
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline' }}>
+            <p style={{ fontSize:16, fontWeight:700, color:'var(--azul)' }}>{livro.nome} {cap}</p>
+            <p style={{ fontSize:11, color:'var(--texto-suave)' }}>NVI</p>
+          </div>
+
+          {loading && (
+            <div style={{ textAlign:'center', padding:'40px 0' }}>
+              <div className="spinner" style={{ margin:'0 auto', borderTopColor:'var(--azul)' }} />
+            </div>
+          )}
+
+          {erro && <div className="error-msg">{erro}</div>}
+
+          {!loading && !erro && versiculos.map((v, i) => (
+            <div key={v.number || i} className={`verse-row ${i > 0 ? 'regular' : ''}`}>
+              <p className={`verse-num ${i > 0 ? 'regular' : ''}`}>{v.number}</p>
+              <p className="verse-text">{v.text}</p>
             </div>
           ))}
-          {/* Navegação inferior */}
-          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-            <button
-              className="btn-secondary"
-              onClick={() => setCapitulo(c => Math.max(1, c-1))}
-              disabled={capitulo <= 1}
-            >← Anterior</button>
-            <button
-              className="btn-secondary"
-              onClick={() => setCapitulo(c => c+1)}
-            >Próximo →</button>
-          </div>
-        </div>
-      )}
 
-      {/* Modal de seleção de livro */}
+          {/* Nav caps */}
+          {!loading && versiculos.length > 0 && (
+            <div style={{ display:'flex', gap:8 }}>
+              <button className="btn btn-outline-blue" onClick={() => irCap(cap-1)} disabled={cap<=1} style={{ minHeight:44, fontSize:13 }}>
+                ← Anterior
+              </button>
+              <button className="btn btn-blue" onClick={() => irCap(cap+1)} disabled={cap>=livro.caps} style={{ minHeight:44, fontSize:13 }}>
+                Próximo →
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modal livros */}
       {showLivros && (
-        <div className="modal-overlay" onClick={() => setShowLivros(false)}>
+        <div className="modal-backdrop" onClick={() => setShowLivros(false)}>
           <div className="modal-sheet" onClick={e => e.stopPropagation()}>
-            <div className="modal-handle" />
-            <div className="modal-title">Escolher Livro</div>
-            <input
-              className="field-input"
-              placeholder="🔍 Buscar livro..."
-              value={busca}
-              onChange={e => setBusca(e.target.value)}
-              style={{ marginBottom: 12 }}
-            />
-            <div style={{ fontSize: 11, fontWeight: 800, color: 'rgba(255,255,255,0.4)', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8 }}>Antigo Testamento</div>
-            {livrosFiltrados.filter(l => LIVROS_AT.includes(l)).map(l => (
-              <button key={l} onClick={() => { setLivro(l); setCapitulo(1); setShowLivros(false) }}
-                style={{ display: 'block', width: '100%', padding: '10px 14px', background: livro===l ? 'rgba(245,192,0,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${livro===l ? '#f5c000' : 'rgba(255,255,255,0.06)'}`, borderRadius: 8, color: livro===l ? '#f5c000' : '#fff', fontFamily: 'Nunito', fontSize: 14, fontWeight: livro===l ? 800 : 600, cursor: 'pointer', textAlign: 'left', marginBottom: 4 }}>
-                {l}
-              </button>
-            ))}
-            <div style={{ fontSize: 11, fontWeight: 800, color: 'rgba(255,255,255,0.4)', letterSpacing: 1, textTransform: 'uppercase', margin: '12px 0 8px' }}>Novo Testamento</div>
-            {livrosFiltrados.filter(l => LIVROS_NT.includes(l)).map(l => (
-              <button key={l} onClick={() => { setLivro(l); setCapitulo(1); setShowLivros(false) }}
-                style={{ display: 'block', width: '100%', padding: '10px 14px', background: livro===l ? 'rgba(245,192,0,0.15)' : 'rgba(255,255,255,0.04)', border: `1px solid ${livro===l ? '#f5c000' : 'rgba(255,255,255,0.06)'}`, borderRadius: 8, color: livro===l ? '#f5c000' : '#fff', fontFamily: 'Nunito', fontSize: 14, fontWeight: livro===l ? 800 : 600, cursor: 'pointer', textAlign: 'left', marginBottom: 4 }}>
-                {l}
-              </button>
-            ))}
+            <div className="modal-handle-bar" />
+            <div className="modal-header">
+              <p className="modal-title">Escolher Livro</p>
+              <div className="search-bar" style={{ marginTop:10 }}>
+                <span style={{ color:'var(--texto-suave)', fontSize:14 }}>🔍</span>
+                <input placeholder="Buscar livro..." value={busca} onChange={e => setBusca(e.target.value)} autoFocus />
+              </div>
+            </div>
+            <div className="modal-body" style={{ paddingTop:12 }}>
+              {atFilt.length > 0 && (
+                <>
+                  <p style={{ fontSize:10, fontWeight:700, letterSpacing:1, color:'var(--texto-suave)', textTransform:'uppercase', marginBottom:8 }}>Antigo Testamento</p>
+                  {atFilt.map(l => {
+                    const idx = LIVROS.indexOf(l)
+                    return (
+                      <button key={l.abrev+l.grupo} onClick={() => irLivro(idx)} style={{
+                        display:'block', width:'100%', padding:'11px 14px', marginBottom:4,
+                        background: idx===livroIdx ? '#eef2ff' : '#fafafa',
+                        border: `1px solid ${idx===livroIdx ? 'var(--azul)' : 'var(--borda)'}`,
+                        borderRadius:'var(--radius-sm)', color: idx===livroIdx ? 'var(--azul)' : 'var(--texto)',
+                        fontFamily:'Plus Jakarta Sans', fontSize:14, fontWeight: idx===livroIdx ? 700 : 500,
+                        cursor:'pointer', textAlign:'left',
+                      }}>{l.nome}</button>
+                    )
+                  })}
+                </>
+              )}
+              {ntFilt.length > 0 && (
+                <>
+                  <p style={{ fontSize:10, fontWeight:700, letterSpacing:1, color:'var(--texto-suave)', textTransform:'uppercase', margin:'16px 0 8px' }}>Novo Testamento</p>
+                  {ntFilt.map(l => {
+                    const idx = LIVROS.indexOf(l)
+                    return (
+                      <button key={l.abrev+l.grupo} onClick={() => irLivro(idx)} style={{
+                        display:'block', width:'100%', padding:'11px 14px', marginBottom:4,
+                        background: idx===livroIdx ? '#eef2ff' : '#fafafa',
+                        border: `1px solid ${idx===livroIdx ? 'var(--azul)' : 'var(--borda)'}`,
+                        borderRadius:'var(--radius-sm)', color: idx===livroIdx ? 'var(--azul)' : 'var(--texto)',
+                        fontFamily:'Plus Jakarta Sans', fontSize:14, fontWeight: idx===livroIdx ? 700 : 500,
+                        cursor:'pointer', textAlign:'left',
+                      }}>{l.nome}</button>
+                    )
+                  })}
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

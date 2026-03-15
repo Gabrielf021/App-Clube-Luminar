@@ -1,7 +1,7 @@
 import './index.css'
 import { useState } from 'react'
 import { AuthProvider, useAuth } from './lib/AuthContext'
-import Stars from './components/Stars'
+import { ToastProvider } from './components/Toast'
 import BottomNav from './components/BottomNav'
 import Login from './pages/Login'
 import Home from './pages/Home'
@@ -16,47 +16,34 @@ function AppInner() {
   const [aba, setAba] = useState('home')
 
   if (loading) return (
-    <div className="loading-screen">
-      <Stars />
+    <div className="loading-full">
+      <div style={{ fontSize: 48, marginBottom: 8 }}>⚜️</div>
       <div className="spinner" />
-      <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>Carregando...</p>
+      <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13, marginTop: 8 }}>Carregando...</p>
     </div>
   )
 
-  if (!user) return (
-    <>
-      <Stars />
-      <Login />
-    </>
-  )
+  if (!user) return <Login />
 
-  const renderPage = () => {
-    switch (aba) {
-      case 'home':    return <Home />
-      case 'checkin': return <Checkin />
-      case 'biblia':  return <Biblia />
-      case 'pontos':  return <Pontos />
-      case 'classe':  return <Classe />
-      case 'admin':   return <Admin />
-      default:        return <Home />
-    }
+  const pages = {
+    home: <Home />, checkin: <Checkin />, biblia: <Biblia />,
+    pontos: <Pontos />, classe: <Classe />, admin: <Admin />,
   }
 
   return (
-    <>
-      <Stars />
-      <div className="app-wrapper">
-        {renderPage()}
-        <BottomNav active={aba} onChange={setAba} />
-      </div>
-    </>
+    <div style={{ height: '100%', position: 'relative' }}>
+      {pages[aba] || <Home />}
+      <BottomNav active={aba} onChange={setAba} />
+    </div>
   )
 }
 
 export default function App() {
   return (
     <AuthProvider>
-      <AppInner />
+      <ToastProvider>
+        <AppInner />
+      </ToastProvider>
     </AuthProvider>
   )
 }
