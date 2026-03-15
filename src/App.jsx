@@ -4,12 +4,13 @@ import { AuthProvider, useAuth } from './lib/AuthContext'
 import { ToastProvider } from './components/Toast'
 import BottomNav from './components/BottomNav'
 import Login from './pages/Login'
-import Home from './pages/Home'
+import Feed from './pages/Feed'
 import Checkin from './pages/Checkin'
 import Biblia from './pages/Biblia'
 import Pontos from './pages/Pontos'
 import Classe from './pages/Classe'
 import Admin from './pages/Admin'
+import Perfil from './pages/Perfil'
 
 function AppInner() {
   const { user, loading } = useAuth()
@@ -26,13 +27,18 @@ function AppInner() {
   if (!user) return <Login />
 
   const pages = {
-    home: <Home />, checkin: <Checkin />, biblia: <Biblia />,
-    pontos: <Pontos />, classe: <Classe />, admin: <Admin />,
+    home:    <Feed />,
+    checkin: <Checkin />,
+    biblia:  <Biblia />,
+    pontos:  <Pontos />,
+    classe:  <Classe />,
+    admin:   <Admin />,
+    perfil:  <Perfil />,
   }
 
   return (
     <div style={{ height: '100%', position: 'relative' }}>
-      {pages[aba] || <Home />}
+      {pages[aba] || <Feed />}
       <BottomNav active={aba} onChange={setAba} />
     </div>
   )

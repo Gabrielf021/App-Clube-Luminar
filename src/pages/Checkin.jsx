@@ -74,6 +74,12 @@ export default function Checkin() {
             perfil_id: user.id, pontos: 20,
             motivo: 'Check-in na reunião', evento_id: evento.id,
           })
+          // Gera post automático no feed
+          const agora = new Date()
+          await supabase.from('posts').insert({
+            autor_id: user.id, tipo: 'checkin',
+            conteudo: evento.nome + ' · ' + agora.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}),
+          })
           await refreshUser()
           setStatus('sucesso')
         } else {
