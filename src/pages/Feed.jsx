@@ -333,21 +333,40 @@ export default function Feed() {
 
   const carregar = useCallback(async () => {
     setLoading(true)
-    // Query com join explícito para buscar autor
-    const { data, error } = await supabase
-      .from('posts')
-      .select(`
-        id, tipo, conteudo, midia_url, midia_tipo, versiculo_ref, requisito_info, criado_em,
-        autor:autor_id (id, nome, foto_url, classe, tipo, avatar_seed)
-      `)
-      .order('criado_em', { ascending: false })
-      .limit(50)
+    try {
+      // Busca posts
+      const { data: postsData, error } = await supabase
+        .from('posts')
+        .select('id, tipo, conteudo, midia_url, midia_tipo, versiculo_ref, requisito_info, criado_em, autor_id')
+        .order('criado_em', { ascending: false })
+        .limit(50)
 
-    if (error) console.error('Feed error:', error)
-    setPosts(data || [])
+      if (error) { console.error('Feed error:', error); setLoading(false); return }
 
-    const { count } = await supabase.from('perfis').select('id', { count: 'exact', head: true })
-    setTotalMembros(count || 0)
+      // Busca autores separadamente
+      const autorIds = [...new Set((postsData || []).map(p => p.autor_id).filter(Boolean))]
+      let autoresMap = {}
+      if (autorIds.length > 0) {
+        const { data: autoresData } = await supabase
+          .from('perfis')
+          .select('id, nome, foto_url, classe, tipo, avatar_seed')
+          .in('id', autorIds)
+        autoresData?.forEach(a => { autoresMap[a.id] = a })
+      }
+
+      // Combina posts com autores
+      const postsComAutor = (postsData || []).map(p => ({
+        ...p,
+        autor: autoresMap[p.autor_id] || { nome: 'Membro', tipo: 'desbravador' }
+      }))
+
+      setPosts(postsComAutor)
+
+      const { count } = await supabase.from('perfis').select('id', { count: 'exact', head: true })
+      setTotalMembros(count || 0)
+    } catch (e) {
+      console.error('Feed catch error:', e)
+    }
     setLoading(false)
   }, [])
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 
 const ABB_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdHIiOiJTdW4gTWFyIDE1IDIwMjYgMDI6NDE6MzQgR01UKzAwMDAuZ2FicmllbGZyYWdvc28zMUBnbWFpbC5jb20iLCJpYXQiOjE3NzM1NDI0OTR9.6pr5wltsB5NbJfNlwd7kZgCiJeb4sDb326o3IW0Acn9I'
 
+
 const LIVROS = [
   { nome:'Gênesis',           abrev:'gn',  caps:50,  grupo:'AT' },
   { nome:'Êxodo',             abrev:'ex',  caps:40,  grupo:'AT' },
@@ -72,43 +73,67 @@ const LIVROS = [
 ]
 
 async function fetchCap(livro, cap) {
-  // Tentativa 1: ABB com token (NVI português)
-  try {
-    const res = await fetch(
-      `https://www.abibliadigital.com.br/api/verses/nvi/${livro.abrev}/${cap}`,
-      { headers: { 'Authorization': `Bearer ${ABB_TOKEN}`, 'Content-Type': 'application/json' } }
-    )
-    if (res.ok) {
-      const data = await res.json()
-      if (data.verses?.length > 0) {
-        return data.verses.map(v => ({ number: v.number, text: v.text }))
-      }
-    }
-  } catch {}
+  // Usa proxy CORS do Supabase Edge Functions ou direto com modo no-cors workaround
+  // Tentativa 1: ABB via fetch com headers CORS corretos
+  const headers = {
+    'Authorization': `Bearer ${ABB_TOKEN}`,
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+  }
 
-  // Tentativa 2: ABB com token (Almeida Corrigida)
-  try {
-    const res = await fetch(
-      `https://www.abibliadigital.com.br/api/verses/aa/${livro.abrev}/${cap}`,
-      { headers: { 'Authorization': `Bearer ${ABB_TOKEN}`, 'Content-Type': 'application/json' } }
-    )
-    if (res.ok) {
-      const data = await res.json()
-      if (data.verses?.length > 0) {
-        return data.verses.map(v => ({ number: v.number, text: v.text }))
+  for (const versao of ['nvi', 'aa', 'acf']) {
+    try {
+      const res = await fetch(
+        `https://www.abibliadigital.com.br/api/verses/${versao}/${livro.abrev}/${cap}`,
+        { method: 'GET', headers, mode: 'cors' }
+      )
+      if (res.ok) {
+        const data = await res.json()
+        if (data.verses?.length > 0) {
+          return data.verses.map(v => ({ number: v.number, text: v.text }))
+        }
       }
-    }
-  } catch {}
+    } catch {}
+  }
 
-  // Tentativa 3: bible-api.com fallback
+  // Tentativa 2: bible-api.com (tem CORS aberto)
   try {
-    const engMap = { mt:'matthew', mc:'mark', lc:'luke', jo:'john', at:'acts', rm:'romans', gn:'genesis', ex:'exodus', sl:'psalms', pv:'proverbs', ap:'revelation', dn:'daniel', is:'isaiah', jr:'jeremiah', ez:'ezekiel', jn:'jonah', rt:'ruth', jo:'job' }
+    const engMap = {
+      gn:'genesis', ex:'exodus', lv:'leviticus', nm:'numbers', dt:'deuteronomy',
+      js:'joshua', jz:'judges', rt:'ruth', '1sm':'1+samuel', '2sm':'2+samuel',
+      '1rs':'1+kings', '2rs':'2+kings', sl:'psalms', pv:'proverbs', ec:'ecclesiastes',
+      is:'isaiah', jr:'jeremiah', ez:'ezekiel', dn:'daniel', jn:'jonah',
+      mt:'matthew', mc:'mark', lc:'luke', jo:'john', at:'acts', rm:'romans',
+      '1co':'1+corinthians', '2co':'2+corinthians', gl:'galatians', ef:'ephesians',
+      fp:'philippians', cl:'colossians', hb:'hebrews', tg:'james',
+      '1pe':'1+peter', '2pe':'2+peter', '1jo':'1+john', ap:'revelation',
+    }
     const eng = engMap[livro.abrev]
     if (eng) {
       const res = await fetch(`https://bible-api.com/${eng}+${cap}?translation=almeida`)
       if (res.ok) {
         const data = await res.json()
-        if (data.verses?.length > 0) return data.verses.map(v => ({ number: v.verse, text: v.text.trim() }))
+        if (data.verses?.length > 0) {
+          return data.verses.map(v => ({ number: v.verse, text: v.text.trim() }))
+        }
+      }
+    }
+  } catch {}
+
+  // Tentativa 3: bible-api.com sem tradução específica
+  try {
+    const engMap2 = {
+      gn:'genesis', ex:'exodus', sl:'psalms', pv:'proverbs',
+      mt:'matthew', mc:'mark', lc:'luke', jo:'john', at:'acts', rm:'romans', ap:'revelation',
+    }
+    const eng = engMap2[livro.abrev]
+    if (eng) {
+      const res = await fetch(`https://bible-api.com/${eng}+${cap}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.verses?.length > 0) {
+          return data.verses.map(v => ({ number: v.verse, text: v.text.trim() }))
+        }
       }
     }
   } catch {}
